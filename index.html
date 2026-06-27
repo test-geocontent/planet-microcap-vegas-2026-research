@@ -528,6 +528,49 @@
   transform: translateY(-1px);
 }
 
+.analysis-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: .6rem;
+  margin-top: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.analysis-page-btn {
+  background: rgba(22,37,68,0.7);
+  color: var(--gold);
+  border: 1px solid rgba(201,168,76,.35);
+  border-radius: 3px;
+  padding: .55rem .85rem;
+  font-size: .76rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background .2s, color .2s, border-color .2s;
+  font-family: 'Inter', sans-serif;
+}
+
+.analysis-page-btn:hover:not(:disabled) {
+  background: rgba(201,168,76,.12);
+  color: var(--gold2);
+  border-color: rgba(201,168,76,.65);
+}
+
+.analysis-page-btn:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+.analysis-page-info {
+  color: var(--muted);
+  font-size: .76rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 0 .35rem;
+}
+
 /* Modal */
 .analysis-modal {
   display: none;
@@ -829,7 +872,10 @@
       </table>
     </div>
 
+    <div class="analysis-pagination reveal" id="pagination"></div>
+	
   </div>
+  
 </section>
 
 <!-- Analysis Modal -->
@@ -984,6 +1030,9 @@ const sheetUrl =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${SHEET_NAME}`;
 
 let allRows = [];
+let filteredRows = [];
+let currentPage = 1;
+const rowsPerPage = 10;
 
 fetch(sheetUrl)
   .then(res => res.text())
@@ -1002,7 +1051,9 @@ fetch(sheetUrl)
       article: r.c[4]?.v || ""
     }));
 
-    renderTable(allRows);
+    filteredRows = allRows;
+    currentPage = 1;
+    renderTable();
   })
   .catch(() => {
     const tbody = document.getElementById("tableBody");
@@ -1020,14 +1071,14 @@ fetch(sheetUrl)
     updateRowCount(0);
   });
 
-function renderTable(data) {
+function renderTable() {
   const tbody = document.getElementById("tableBody");
 
   if (!tbody) return;
 
   tbody.innerHTML = "";
 
-  if (!data.length) {
+  if (!filteredRows.length) {
     tbody.innerHTML = `
       <tr>
         <td colspan="4" class="analysis-loading">
@@ -1037,10 +1088,15 @@ function renderTable(data) {
     `;
 
     updateRowCount(0);
+    renderPagination();
     return;
   }
 
-  data.forEach(row => {
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const pageRows = filteredRows.slice(start, end);
+
+  pageRows.forEach(row => {
     const tr = document.createElement("tr");
 
     tr.innerHTML = `
@@ -1057,7 +1113,8 @@ function renderTable(data) {
     tbody.appendChild(tr);
   });
 
-  updateRowCount(data.length);
+  updateRowCount(filteredRows.length);
+  renderPagination();
 }
 
 function openArticle(id) {
@@ -1090,6 +1147,42 @@ function updateRowCount(count) {
     : `${count} companies loaded`;
 }
 
+function renderPagination() {
+  const pagination = document.getElementById("pagination");
+
+  if (!pagination) return;
+
+  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+
+  if (totalPages <= 1) {
+    pagination.innerHTML = "";
+    return;
+  }
+
+  pagination.innerHTML = `
+    <button class="analysis-page-btn" ${currentPage === 1 ? "disabled" : ""} onclick="goToPage(${currentPage - 1})">
+      Previous
+    </button>
+
+    <span class="analysis-page-info">
+      Page ${currentPage} of ${totalPages}
+    </span>
+
+    <button class="analysis-page-btn" ${currentPage === totalPages ? "disabled" : ""} onclick="goToPage(${currentPage + 1})">
+      Next
+    </button>
+  `;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+
+  if (page < 1 || page > totalPages) return;
+
+  currentPage = page;
+  renderTable();
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1105,12 +1198,13 @@ if (analysisSearch) {
   analysisSearch.addEventListener("input", function () {
     const q = this.value.toLowerCase().trim();
 
-    const filtered = allRows.filter(row =>
+    filteredRows = allRows.filter(row =>
       row.company.toLowerCase().includes(q) ||
       row.ticker.toLowerCase().includes(q)
     );
 
-    renderTable(filtered);
+    currentPage = 1;
+    renderTable();
   });
 }
 
